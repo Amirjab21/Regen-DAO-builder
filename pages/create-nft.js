@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { ethers } from 'ethers'
 import { create as ipfsHttpClient } from 'ipfs-http-client'
 import { useRouter } from 'next/router'
-import Web3Modal from 'web3modal'
+import Web3Modal from 'web3modal';
+import LiquidDAONFTABI from '../artifacts/contracts/NFTFactory.sol/NFTFactory.json'
 
 const client = ipfsHttpClient('https://ipfs.infura.io:5001/api/v0')
 
@@ -14,7 +15,7 @@ import NFTMarketplace from '../artifacts/contracts/NFTMarketplace.sol/NFTMarketp
 
 export default function CreateItem() {
   const [fileUrl, setFileUrl] = useState(null)
-  const [formInput, updateFormInput] = useState({ price: '', name: '', description: '' })
+  const [formInput, updateFormInput] = useState({ DAODetails: [], numberOfTypes: 0, DAOName: '', DAOSymbol: '' })
   const router = useRouter()
 
   async function onChange(e) {
@@ -33,11 +34,11 @@ export default function CreateItem() {
     }  
   }
   async function uploadToIPFS() {
-    const { name, description, price } = formInput
-    if (!name || !description || !price || !fileUrl) return
+    const { name, type, price, reputation } = formInput
+    if (!name || !type || !price || !fileUrl) return
     /* first, upload to IPFS */
     const data = JSON.stringify({
-      name, description, image: fileUrl
+      name, type, image: fileUrl, reputation
     })
     try {
       const added = await client.add(data)
@@ -65,6 +66,32 @@ export default function CreateItem() {
     await transaction.wait()
    
     router.push('/')
+  }
+
+  async function createDAO() {
+    const web3Modal = new Web3Modal()
+    const connection = await web3Modal.connect()
+    const provider = new ethers.providers.Web3Provider(connection)
+    const signer = provider.getSigner();
+  
+    const NFTFactoryAddress = '0xdc17c27ae8be831af07cc38c02930007060020f4';
+    let NFTFactoryContract = new ethers.Contract(NFTFactoryAddress, LiquidDAONFTABI.abi, signer);
+    const DAODetails = [
+      { name: 'investors', percentage: ethers.BigNumber.from(20)},
+      { name: 'contributors', percentage: ethers.BigNumber.from(30)},
+      { name: 'founding team', percentage: ethers.BigNumber.from(50)},
+    ];
+    const DAOName = 'first DAO';
+    const DAOSymbol = 'FDA';
+    const result = await NFTFactoryContract.connect(signer).registerDAO(
+      DAODetails,
+      ethers.BigNumber.from(3),
+      DAOName,
+      DAOSymbol,
+      {gasLimit: 60000000}
+    );
+
+    console.log(result);
   }
 
   return (
@@ -98,6 +125,10 @@ export default function CreateItem() {
         }
         <button onClick={listNFTForSale} className="font-bold mt-4 bg-pink-500 text-white rounded p-4 shadow-lg">
           Create NFT
+        </button>
+
+        <button onClick={createDAO} className="font-bold mt-4 bg-pink-500 text-white rounded p-4 shadow-lg">
+          create DAO
         </button>
       </div>
     </div>
